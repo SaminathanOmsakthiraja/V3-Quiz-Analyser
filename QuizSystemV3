@@ -1,0 +1,358 @@
+import java.io.*;
+import java.util.*;
+
+// ================= Interface =================
+interface User {
+    void collectDetails(Scanner sc);
+}
+
+// ================= Question =================
+class Question {
+    private String questionText;
+    private List<String> options;
+    private int correctAnswer;
+
+    public Question(String questionText, List<String> options, int correctAnswer) {
+        this.questionText = questionText;
+        this.options = new ArrayList<>(options);
+        this.correctAnswer = correctAnswer;
+    }
+
+    public String getQuestionText() { return questionText; }
+    public List<String> getOptions() { return options; }
+    public boolean isCorrect(int index) { return index == correctAnswer; }
+    public String getCorrectAnswer() { return options.get(correctAnswer); }
+
+    public void shuffleOptions() {
+        String correctOpt = options.get(correctAnswer);
+        Collections.shuffle(options);
+        correctAnswer = options.indexOf(correctOpt);
+    }
+
+    public String toFileString() {
+        return questionText + "|" + String.join(",", options) + "|" + correctAnswer;
+    }
+
+    public static Question fromFileString(String line) {
+        String[] parts = line.split("\\|");
+        if(parts.length != 3) return null;
+        String text = parts[0];
+        List<String> opts = Arrays.asList(parts[1].split(","));
+        int correct = Integer.parseInt(parts[2]);
+        return new Question(text, opts, correct);
+    }
+}
+
+// ================= Subject Quiz =================
+abstract class SubjectQuiz {
+    protected String subjectName;
+    protected String fileName;
+
+    public SubjectQuiz(String name, String fileName) {
+        this.subjectName = name;
+        this.fileName = fileName;
+        preloadQuestions(); // Auto-load defaults if file is empty
+    }
+
+    public String getSubjectName() { return subjectName; }
+
+    public List<Question> getQuestions() {
+        List<Question> list = new ArrayList<>();
+        try (BufferedReader br = new BufferedReader(new FileReader(fileName))) {
+            String line;
+            while((line=br.readLine()) != null){
+                Question q = Question.fromFileString(line);
+                if(q != null) list.add(q);
+            }
+        } catch(IOException e){}
+        return list;
+    }
+
+    public void addQuestion(Question q) {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(fileName,true))) {
+            bw.write(q.toFileString());
+            bw.newLine();
+        } catch(IOException e) {
+            System.out.println("Error writing question file.");
+        }
+    }
+
+    // Preload default questions if file is empty
+    private void preloadQuestions() {
+        File f = new File(fileName);
+        if(f.exists() && f.length() > 0) return; // File already has questions
+
+        List<Question> defaults = new ArrayList<>();
+        switch(subjectName.toLowerCase()){
+            case "java":
+                defaults.add(new Question("Who invented Java?", Arrays.asList("James Gosling","Bjarne Stroustrup","Guido van Rossum","Dennis Ritchie"),0));
+                defaults.add(new Question("Which keyword is used to inherit a class in Java?", Arrays.asList("extends","implements","inherits","super"),0));
+                defaults.add(new Question("Which is not a Java feature?", Arrays.asList("Object Oriented","Use of Pointers","Robust","Portable"),1));
+                defaults.add(new Question("What is JVM short for?", Arrays.asList("Java Virtual Machine","Java Visual Model","Just Virtual Machine","Java Vendor Model"),0));
+                break;
+            case "python":
+                defaults.add(new Question("Who created Python?", Arrays.asList("Guido van Rossum","James Gosling","Dennis Ritchie","Bjarne Stroustrup"),0));
+                defaults.add(new Question("Which keyword is used to define a function in Python?", Arrays.asList("func","def","function","lambda"),1));
+                defaults.add(new Question("Which of these is immutable?", Arrays.asList("List","Set","Dictionary","Tuple"),3));
+                defaults.add(new Question("What symbol starts a comment in Python?", Arrays.asList("#","//","/*","--"),0));
+                break;
+            case "dsa":
+                defaults.add(new Question("Which data structure works on FIFO?", Arrays.asList("Stack","Queue","Tree","Graph"),1));
+                defaults.add(new Question("Which sorting algorithm has best case O(n)?", Arrays.asList("QuickSort","BubbleSort","MergeSort","InsertionSort"),3));
+                defaults.add(new Question("Which data structure uses recursion heavily?", Arrays.asList("Array","Tree","Queue","Stack"),1));
+                defaults.add(new Question("Which is not linear DS?", Arrays.asList("LinkedList","Queue","Tree","Stack"),2));
+                break;
+            case "aptitude":
+                defaults.add(new Question("Find the missing number: 2,6,12,20,?", Arrays.asList("28","30","32","34"),0));
+                defaults.add(new Question("If 5x=20, then x=?", Arrays.asList("2","3","4","5"),2));
+                defaults.add(new Question("A train 100m long runs at 60 km/h. Time to pass pole?", Arrays.asList("5s","6s","8s","12s"),1));
+                defaults.add(new Question("Average of 10,20,30,40,50?", Arrays.asList("20","25","30","35"),2));
+                break;
+        }
+
+        for(Question q : defaults){
+            addQuestion(q);
+        }
+    }
+}
+
+// ================= Subject Implementations =================
+class JavaQuiz extends SubjectQuiz { 
+    public JavaQuiz(){ 
+        super("Java","java_questions.txt"); 
+    } 
+    
+}
+class PythonQuiz extends SubjectQuiz { 
+    public PythonQuiz(){ 
+        super("Python","python_questions.txt"); 
+    } 
+}
+class DSQuiz extends SubjectQuiz { 
+    public DSQuiz(){ 
+        super("DSA","dsa_questions.txt"); 
+    }
+}
+class AptitudeQuiz extends SubjectQuiz { 
+    public AptitudeQuiz(){ 
+        super("Aptitude","aptitude_questions.txt");
+    }
+}
+
+// ================= Student =================
+class Student implements User {
+    private String name;
+    public Student(String name){ this.name=name; }
+    public String getName(){ return name; }
+
+    @Override
+    public void collectDetails(Scanner sc) {
+        System.out.print("Enter Student Name: ");
+        name = sc.nextLine();
+    }
+}
+
+// ================= Teacher =================
+class Teacher implements User {
+    private String name;
+    public Teacher(String name){ this.name=name; }
+    public String getName(){ return name; }
+
+    @Override
+    public void collectDetails(Scanner sc){
+        System.out.print("Enter Teacher Name: ");
+        name = sc.nextLine();
+    }
+}
+
+// ================= Main Quiz System =================
+public class QuizSystemV3 {
+    private static Scanner sc = new Scanner(System.in);
+    private static final String STUDENT_FILE = "students.txt";
+    private static final String RESULT_FILE = "results.txt";
+
+    private static boolean validateStudent(String studentName){
+        try(BufferedReader br = new BufferedReader(new FileReader(STUDENT_FILE))){
+            String line;
+            while((line=br.readLine())!=null){
+                if(line.equalsIgnoreCase(studentName)) return true;
+            }
+        } catch(IOException e){}
+        return false;
+    }
+
+    private static void addStudents(){
+        System.out.print("How many students to add? ");
+        int count = sc.nextInt(); sc.nextLine();
+
+        try(BufferedWriter bw = new BufferedWriter(new FileWriter(STUDENT_FILE,true))){
+            for(int i=1;i<=count;i++){
+                System.out.print("Enter Student " + i + " Name: ");
+                String sName = sc.nextLine();
+                bw.write(sName);
+                bw.newLine();
+            }
+            System.out.println("Students added successfully.");
+        } catch(IOException e){
+            System.out.println("Error writing student file.");
+        }
+    }
+
+    private static void saveResult(String studentName, String subject, int score, int total){
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(RESULT_FILE,true))){
+            bw.write(studentName + "|" + subject + "|" + score + "|" + total);
+            bw.newLine();
+        } catch(IOException e){
+            System.out.println("Error writing result file.");
+        }
+    }
+
+    private static void viewResults(String studentName, boolean isTeacher){
+        System.out.println("\n--------------------------------------------------------------");
+        System.out.println("                       RESULTS                  ");
+        System.out.println("--------------------------------------------------------------");
+        try(BufferedReader br = new BufferedReader(new FileReader(RESULT_FILE))){
+            String line;
+            while((line=br.readLine())!=null){
+                String[] parts = line.split("\\|");
+                if(isTeacher || parts[0].equalsIgnoreCase(studentName)){
+                    int score = Integer.parseInt(parts[2]);
+                    int total = Integer.parseInt(parts[3]);
+                    String status = (score*100/total)>=50 ? "PASS" : "FAIL";
+                    System.out.println("Student: "+parts[0]+" | Subject: "+parts[1]+" | Score: "+score+"/"+total+" | Status: "+status);
+                }
+            }
+        } catch(IOException e){
+            System.out.println("No results found.");
+        }
+        System.out.println("--------------------------------------------------------------\n");
+    }
+
+    private static SubjectQuiz chooseSubject(){
+        System.out.println("\nChoose Subject:");
+        System.out.println("1) Java");
+        System.out.println("2) Python");
+        System.out.println("3) DSA");
+        System.out.println("4) Aptitude");
+        System.out.print("\nEnter choice: ");
+        int ch = sc.nextInt(); sc.nextLine();
+        switch(ch){
+            case 1: return new JavaQuiz();
+            case 2: return new PythonQuiz();
+            case 3: return new DSQuiz();
+            case 4: return new AptitudeQuiz();
+            default: return null;
+        }
+    }
+
+    private static void addQuestionToSubject(){
+        SubjectQuiz subject = chooseSubject();
+        if(subject==null){ System.out.println("Invalid subject choice."); return; }
+
+        System.out.print("\nEnter Question Text: ");
+        String text = sc.nextLine();
+        List<String> options = new ArrayList<>();
+        for(int i=1;i<=4;i++){
+            System.out.print("Option "+i+": ");
+            options.add(sc.nextLine());
+        }
+        System.out.print("\nEnter Correct Option (1-4): ");
+        int correct = sc.nextInt()-1; sc.nextLine();
+
+        Question q = new Question(text,options,correct);
+        subject.addQuestion(q);
+        System.out.println("Question added successfully to "+subject.getSubjectName());
+    }
+
+    private static void conductQuiz(Student student, SubjectQuiz subject){
+        List<Question> questions = subject.getQuestions();
+        if(questions.isEmpty()){ System.out.println("No questions available for "+subject.getSubjectName()); return; }
+
+        System.out.println("\n----------------------------------------");
+        System.out.println("         QUIZ: "+subject.getSubjectName());
+        System.out.println("----------------------------------------");
+
+        int score = 0;
+        for(int i=0;i<questions.size();i++){
+            Question q = questions.get(i);
+            q.shuffleOptions();
+            System.out.println("\nQ"+(i+1)+": "+q.getQuestionText());
+            List<String> opts = q.getOptions();
+            for(int j=0;j<opts.size();j++){
+                System.out.println("  "+(j+1)+") "+opts.get(j));
+            }
+
+            int choice = -1;
+            while(true){
+                System.out.print("Your Answer (1-4): ");
+                if(sc.hasNextInt()){ choice = sc.nextInt()-1; sc.nextLine(); }
+                else { sc.next(); continue; }
+                if(choice>=0 && choice<4) break;
+            }
+
+            if(q.isCorrect(choice)){
+                System.out.println("Correct!");
+                score++;
+            } else {
+                System.out.println("Wrong! Correct answer: "+q.getCorrectAnswer());
+            }
+        }
+
+        System.out.println("----------------------------------------");
+        System.out.println("Quiz Finished. Score: "+score+"/"+questions.size());
+        System.out.println("----------------------------------------\n");
+        saveResult(student.getName(),subject.getSubjectName(),score,questions.size());
+    }
+
+    // ================= Main =================
+    public static void main(String[] args){
+        while(true){
+            System.out.println("========================================");
+            System.out.println("            QUIZ SYSTEM V3              ");
+            System.out.println("========================================");
+            System.out.println("1) Teacher");
+            System.out.println("2) Student");
+            System.out.println("3) Exit");
+            System.out.print("\nEnter choice: ");
+            int role = sc.nextInt(); sc.nextLine();
+            System.out.println(' ');
+
+            if(role==1){
+                Teacher teacher = new Teacher("Admin");
+                teacher.collectDetails(sc);
+                System.out.println("\n1) Add Students\n2) View Results\n3) Add Questions\n4) Back");
+                System.out.print("\nEnter choice: ");
+                int tChoice = sc.nextInt(); sc.nextLine();
+                switch(tChoice){
+                    case 1: addStudents(); break;
+                    case 2: viewResults("",true); break;
+                    case 3: addQuestionToSubject(); break;
+                    case 4: break;
+                    default: System.out.println("Invalid choice."); 
+                }
+
+            } else if(role==2){
+                System.out.print("Enter Student Name: ");
+                String sName = sc.nextLine();
+                if(!validateStudent(sName)){ System.out.println("You are not registered. Contact teacher."); continue; }
+
+                Student student = new Student(sName);
+                System.out.println("1) Attempt Quiz\n2) View My Results");
+                System.out.print("\nEnter choice: ");
+                int sChoice = sc.nextInt(); sc.nextLine();
+
+                if(sChoice==1){
+                    SubjectQuiz subject = chooseSubject();
+                    if(subject==null){ System.out.println("Invalid subject choice."); continue; }
+                    conductQuiz(student,subject);
+                } else if(sChoice==2){
+                    viewResults(sName,false);
+                }
+
+            } else if(role==3){
+                System.out.println("Exiting Quiz System. Goodbye!");
+                break;
+            } else System.out.println("Invalid choice. Try again.");
+        }
+    }
+}
